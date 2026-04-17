@@ -77,31 +77,30 @@ C言語で実装したネットワーク監視ツールです。
 
 ## ディレクトリ構成
 
-```
-
+```text
 network-monitor/
 ├── src/
-│ ├── main.c
-│ ├── scanner.c
-│ ├── anomaly.c
-│ ├── status.c
-│ ├── webserver.c
-│ ├── logger.c
-│ ├── config.c
-│ └── utils.c
+│   ├── main.c
+│   ├── scanner.c
+│   ├── anomaly.c
+│   ├── status.c
+│   ├── webserver.c
+│   ├── logger.c
+│   ├── config.c
+│   └── utils.c
 ├── include/
-│ ├── scanner.h
-│ ├── anomaly.h
-│ ├── status.h
-│ ├── webserver.h
-│ ├── logger.h
-│ ├── config.h
-│ └── utils.h
+│   ├── scanner.h
+│   ├── anomaly.h
+│   ├── status.h
+│   ├── webserver.h
+│   ├── logger.h
+│   ├── config.h
+│   └── utils.h
 ├── web/
-│ └── index.html
-│ └── screenshot.png
+│   ├── index.html
+│   └── screenshot.png
 ├── data/
-│ └── results.csv
+│   └── results.csv
 └── Makefile
 
 ```
