@@ -52,10 +52,12 @@ C言語で実装したネットワーク監視ツールです。
   - 簡易HTTPサーバ実装
   - JSON生成（手動）
 
+```md
 ---
 
 ## システム構成
 
+```text
 [ポート監視スレッド]
         ↓
 [ScanResult]
@@ -70,6 +72,7 @@ C言語で実装したネットワーク監視ツールです。
  └───────────────┘
         ↓
 [ブラウザ表示]
+```
 
 ---
 
@@ -95,10 +98,12 @@ network-monitor/
 │ └── utils.h
 ├── web/
 │ └── index.html
-| └── screenshot.png
+│ └── screenshot.png
 ├── data/
 │ └── results.csv
 └── Makefile
+
+```
 
 ---
 
