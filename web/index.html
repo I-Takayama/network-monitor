@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Network Monitor</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 24px;
+      background: #f7f7f7;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin-top: 0;
+      color: #555;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    th {
+      background: #eaeaea;
+    }
+
+    tr.normal {
+      background: #ffffff;
+    }
+
+    tr.anomaly {
+      background: #ffe5e5;
+    }
+
+    .open {
+      color: green;
+      font-weight: bold;
+    }
+
+    .closed {
+      color: red;
+      font-weight: bold;
+    }
+
+    .error {
+      color: orange;
+      font-weight: bold;
+    }
+
+    #updated-at {
+      margin-bottom: 14px;
+      font-size: 13px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>Network Monitor Dashboard</h1>
+  <p>ポート監視結果をリアルタイム表示します。</p>
+  <div id="updated-at">更新待機中...</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>IP</th>
+        <th>Port</th>
+        <th>Status</th>
+        <th>Response(ms)</th>
+        <th>Anomaly</th>
+      </tr>
+    </thead>
+    <tbody id="result-body"></tbody>
+  </table>
+
+  <script>
+    function resultToText(result) {
+      if (result === 1) return "OPEN";
+      if (result === 0) return "CLOSED";
+      return "ERROR";
+    }
+
+    function resultClass(result) {
+      if (result === 1) return "open";
+      if (result === 0) return "closed";
+      return "error";
+    }
+
+    async function fetchStatus() {
+      try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+
+        const tbody = document.getElementById('result-body');
+        tbody.innerHTML = '';
+
+        data.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.className = (item.anomaly_type === 0) ? 'normal' : 'anomaly';
+
+          tr.innerHTML = `
+            <td>${item.time_str || ''}</td>
+            <td>${item.ip || ''}</td>
+            <td>${item.port}</td>
+            <td class="${resultClass(item.result)}">${resultToText(item.result)}</td>
+            <td>${item.response_ms}</td>
+            <td>${item.anomaly_message || ''}</td>
+          `;
+
+          tbody.appendChild(tr);
+        });
+
+        const now = new Date();
+        document.getElementById('updated-at').textContent =
+          `最終更新: ${now.toLocaleString()}`;
+      } catch (error) {
+        console.error('fetch error:', error);
+        document.getElementById('updated-at').textContent =
+          'データ取得に失敗しました';
+      }
+    }
+
+    fetchStatus();
+    setInterval(fetchStatus, 2000);
+  </script>
+</body>
+</html>
