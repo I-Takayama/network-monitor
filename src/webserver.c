@@ -11,11 +11,23 @@
 #define BUFFER_SIZE 4096
 #define JSON_BUFFER_SIZE 65536
 
+// クライアントへ404レスポンスを返す
 static void send_404(int client_sock);
+
+// index.html を読み込み、トップページとして返す
 static void send_index_html(int client_sock);
+
+// 共有監視状態をJSON形式に変換して返す
 static void send_status_json(int client_sock, SharedStatus* shared_status);
+
+// 受信したHTTPリクエストに応じて応答を切り替える
 static void handle_client(int client_sock, SharedStatus* shared_status);
 
+/*
+ * 簡易Webサーバを起動する
+ * ブラウザからのHTTPリクエストを受け付け、
+ * HTML画面またはJSON形式の監視結果を返す
+ */
 void* start_web_server(void* arg) {
     WebServerArg* server_arg = (WebServerArg*)arg;
     int server_port = server_arg->port;
@@ -26,12 +38,14 @@ void* start_web_server(void* arg) {
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
 
+    // TCPサーバ用ソケットを生成する
     server_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (server_sock < 0) {
         perror("socket");
         return NULL;
     }
 
+    // サーバ再起動時にポートを再利用しやすくする
     int opt = 1;
     if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("setsockopt");
@@ -39,17 +53,20 @@ void* start_web_server(void* arg) {
         return NULL;
     }
 
+    // サーバの待受アドレス情報を初期化する
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(server_port);
 
+    // 指定ポートにバインドして外部から接続可能にする
     if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("bind");
         close(server_sock);
         return NULL;
     }
 
+    // 接続待ち状態に移行する
     if (listen(server_sock, 10) < 0) {
         perror("listen");
         close(server_sock);
@@ -58,6 +75,7 @@ void* start_web_server(void* arg) {
 
     printf("Web server started: http://localhost:%d/\n", server_port);
 
+    // クライアントからの接続を繰り返し受け付ける
     while (1) {
         int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
         if (client_sock < 0) {
@@ -65,6 +83,7 @@ void* start_web_server(void* arg) {
             continue;
         }
 
+        // 受信したリクエストの内容に応じて応答を返す
         handle_client(client_sock, shared_status);
         close(client_sock);
     }
@@ -73,27 +92,39 @@ void* start_web_server(void* arg) {
     return NULL;
 }
 
+/*
+ * クライアントから受信したHTTPリクエストを解析し、
+ * パスに応じてHTML / JSON / 404を返す
+ */
 static void handle_client(int client_sock, SharedStatus* shared_status) {
     char buffer[BUFFER_SIZE];
     int received;
 
+    // 受信用バッファを初期化してリクエストを受信する
     memset(buffer, 0, sizeof(buffer));
     received = recv(client_sock, buffer, sizeof(buffer) - 1, 0);
     if (received <= 0) {
         return;
     }
 
+    // トップページ要求なら index.html を返す
     if (strncmp(buffer, "GET / ", 6) == 0 || strncmp(buffer, "GET /HTTP", 9) == 0) {
         send_index_html(client_sock);
     }
+    // API要求なら監視結果をJSONで返す
     else if (strncmp(buffer, "GET /api/status ", 16) == 0) {
         send_status_json(client_sock, shared_status);
     }
+    // 定義していないパスには404を返す
     else {
         send_404(client_sock);
     }
 }
 
+/*
+ * ブラウザ表示用の index.html を返す
+ * ファイルが存在しない場合は 500 Internal Server Error を返す
+ */
 static void send_index_html(int client_sock) {
     FILE* fp = fopen("web/index.html", "r");
     if (fp == NULL) {
@@ -110,6 +141,7 @@ static void send_index_html(int client_sock) {
         return;
     }
 
+    // HTMLファイル全体を読み込むためサイズを取得する
     fseek(fp, 0, SEEK_END);
     long file_size = ftell(fp);
     rewind(fp);
@@ -120,10 +152,12 @@ static void send_index_html(int client_sock) {
         return;
     }
 
+    // ファイル内容を格納するバッファを動的確保する
     fread(body, 1, file_size, fp);
     body[file_size] = '\0';
     fclose(fp);
 
+    // HTTPレスポンスとしてHTMLを返す
     dprintf(client_sock,
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: text/html; charset=UTF-8\r\n"
@@ -136,17 +170,24 @@ static void send_index_html(int client_sock) {
     free(body);
 }
 
+/*
+ * 共有監視状態をJSON形式で返す
+ * 外部ライブラリは使わず、snprintfで手動生成している
+ */
 static void send_status_json(int client_sock, SharedStatus* shared_status) {
     char body[JSON_BUFFER_SIZE];
     int offset = 0;
 
+    // 共有データを安全に参照するため、JSON生成中はロックする
     pthread_mutex_lock(&shared_status->mutex);
 
+    // JSON配列の開始
     offset += snprintf(body + offset, sizeof(body) - offset, "[");
 
     for (int i = 0; i < shared_status->count; i++) {
         MonitorResult* r = &shared_status->results[i];
 
+        // 各ポートの監視結果をJSONオブジェクトとして連結する
         offset += snprintf(
             body + offset,
             sizeof(body) - offset,
@@ -170,15 +211,19 @@ static void send_status_json(int client_sock, SharedStatus* shared_status) {
             r->anomaly.message
         );
 
+        // バッファあふれを防ぐため、残量が少なくなったら生成を打ち切る
         if (offset >= (int)sizeof(body) - 512) {
             break;
         }
     }
 
+    // JSON配列の終了
     offset += snprintf(body + offset, sizeof(body) - offset, "]");
 
+    // JSON生成が終わったので共有データのロックを解除する
     pthread_mutex_unlock(&shared_status->mutex);
 
+    // application/json としてクライアントへ返す
     dprintf(client_sock,
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: application/json; charset=UTF-8\r\n"
@@ -189,6 +234,9 @@ static void send_status_json(int client_sock, SharedStatus* shared_status) {
             offset, body);
 }
 
+/*
+ * 未定義のパスに対して 404 Not Found を返す
+ */
 static void send_404(int client_sock) {
     const char* body = "<html><body><h1>404 Not Found</h1></body></html>";
 
